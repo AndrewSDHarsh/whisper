@@ -1,17 +1,21 @@
-name: Publish Python Package
+name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+    - main
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+    - uses: actions/checkout@v3
+
+    - uses: actions-ecosystem/action-regex-match@v2
+      id: regex-match
+      with:
+        text: ${{ github.event.head_commit.message }}
+        regex: '^Release ([^ ]+)'
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -24,32 +28,13 @@ jobs:
         pip install setuptools wheel twine
 
     - name: Build wheel
+      if: ${{ steps.regex-match.outputs.match != '' }}
       run: |
         python setup.py bdist_wheel
 
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+    - name: Release
+      if: ${{ steps.regex-match.outputs.match != '' }}
+      uses: softprops/action-gh-release@v1
       with:
-        name: build-artifacts
-        path: dist/*.whl
-
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
-        prerelease: false
-
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: dist/*.whl
-        asset_name: whisper-0.1.0-py3-none-any.whl
-        asset_content_type: application/zip
+        tag_name: v${{ steps.regex-match.outputs.group1 }}
+        files: dist/*.whl
